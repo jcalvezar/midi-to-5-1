@@ -48,7 +48,14 @@ def progress(step_idx, total, label):
 
 
 def fail(error):
-    steps[-1]["status"] = "error"
+    found = False
+    for s in steps:
+        if s["status"] in ("processing", "pending"):
+            s["status"] = "error"
+            found = True
+            break
+    if not found and steps:
+        steps[-1]["status"] = "error"
     flush_status("error", 0, 0)
     print(json.dumps({"type": "error", "message": str(error)}), flush=True)
     sys.exit(1)
@@ -60,9 +67,15 @@ def done():
     print(json.dumps({"type": "done"}), flush=True)
 
 
+CMD_TIMEOUT = 600
+
 def run_cmd(cmd, desc):
     log(f"Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=CMD_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        fail(f"{desc} timed out after {CMD_TIMEOUT}s")
+        return ""
     if result.returncode != 0:
         log(f"STDERR: {result.stderr}")
         fail(f"{desc} failed: {result.stderr}")

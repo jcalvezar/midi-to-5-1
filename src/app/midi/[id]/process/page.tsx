@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 
 type Step = {
@@ -40,24 +40,40 @@ export default function ProcessPage() {
     status: 'pending', step: 0, total: 0, label: '',
   })
   const [error, setError] = useState<string | null>(null)
+  const [stuck, setStuck] = useState(false)
   const [downloads, setDownloads] = useState<{ dts: string | null; ac3: string | null }>({
     dts: null, ac3: null,
   })
+  const lastUpdate = useRef(0)
+  const doneRef = useRef(false)
 
   useEffect(() => {
     const interval = setInterval(async () => {
+      if (doneRef.current) return
       try {
         const res = await fetch(`/api/midi/${id}/status`)
         const d: ProcessStatus = await res.json()
         setData(d)
+        lastUpdate.current = Date.now()
+        setStuck(false)
         if (d.files) setDownloads(d.files)
-        if (d.status === 'completed' || d.status === 'error') clearInterval(interval)
+        if (d.status === 'completed' || d.status === 'error') {
+          doneRef.current = true
+          clearInterval(interval)
+        }
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Unknown error')
         clearInterval(interval)
       }
     }, 1000)
-    return () => clearInterval(interval)
+
+    const stuckTimer = setInterval(() => {
+      if (Date.now() - lastUpdate.current > 30000) {
+        setStuck(true)
+      }
+    }, 5000)
+
+    return () => { clearInterval(interval); clearInterval(stuckTimer) }
   }, [id])
 
   const steps = data.steps ?? []
@@ -65,6 +81,12 @@ export default function ProcessPage() {
   return (
     <div className="flex flex-col flex-1 items-center p-8 max-w-2xl mx-auto w-full">
       <h1 className="text-2xl font-bold mb-6">Processing MIDI</h1>
+
+      {stuck && (
+        <div className="w-full p-3 mb-4 bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 rounded-lg text-sm text-center">
+          The process seems stuck. Check the server console for errors.
+        </div>
+      )}
 
       {steps.length > 0 && (
         <div className="w-full space-y-2 mb-8">
