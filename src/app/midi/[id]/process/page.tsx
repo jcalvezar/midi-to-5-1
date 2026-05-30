@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: 'Pendiente',
-  processing: 'Procesando',
-  completed: 'Completado',
+  pending: 'Pending',
+  processing: 'Processing',
+  completed: 'Completed',
   error: 'Error',
 }
 
@@ -45,7 +45,7 @@ export default function ProcessPage() {
           clearInterval(interval)
         }
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : 'Error desconocido')
+        setError(e instanceof Error ? e.message : 'Unknown error')
         clearInterval(interval)
       }
     }, 1000)
@@ -58,7 +58,7 @@ export default function ProcessPage() {
 
   return (
     <div className="flex flex-col flex-1 items-center p-8 max-w-lg mx-auto w-full">
-      <h1 className="text-2xl font-bold mb-6">Procesando MIDI</h1>
+      <h1 className="text-2xl font-bold mb-6">Processing MIDI</h1>
 
       <div className="w-full mb-8">
         <div className="flex justify-between text-sm mb-2">
@@ -89,20 +89,20 @@ export default function ProcessPage() {
       {status.status === 'processing' && (
         <div className="flex flex-col items-center gap-3 text-zinc-500">
           <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm">Procesando... esto puede tomar varios minutos</p>
+          <p className="text-sm">Processing... this may take several minutes</p>
         </div>
       )}
 
       {status.status === 'error' && (
         <div className="w-full p-4 bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 rounded-lg text-sm">
-          {status.error || 'Error desconocido'}
+          {status.error || 'Unknown error'}
         </div>
       )}
 
       {status.status === 'completed' && (
         <div className="w-full space-y-4">
           <div className="p-4 bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 rounded-lg text-sm text-center">
-            ¡Procesado completado!
+            Processing complete!
           </div>
 
           <div className="flex gap-3 justify-center">
@@ -117,7 +117,7 @@ export default function ProcessPage() {
                     d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
-                Descargar DTS
+                Download DTS
               </a>
             )}
             {downloads.ac3 && (
@@ -131,14 +131,14 @@ export default function ProcessPage() {
                     d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
-                Descargar AC3
+                Download AC3
               </a>
             )}
           </div>
 
           {!downloads.dts && !downloads.ac3 && (
             <p className="text-zinc-400 text-sm text-center">
-              No se encontraron archivos de salida
+              No output files found
             </p>
           )}
         </div>

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Midiar",
-  description: "Convierte MIDI a DTS/AC3 5.1",
+  description: "Convert MIDI to DTS/AC3 5.1",
 };
 
 export default function RootLayout({

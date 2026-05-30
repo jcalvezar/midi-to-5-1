@@ -1,31 +1,31 @@
 # Midiar
 
-Convierte archivos MIDI a DTS/AC3 5.1 multicanal.
+Convert MIDI files to multi-channel DTS/AC3 5.1.
 
-## Requisitos
+## Requirements
 
 - **Node.js** 20+
-- **Python 3** con [`mido`](https://github.com/mido/mido) (`pip install mido`)
-- **FluidSynth** con un SoundFont (ej: `Musyng Kite.sf2`)
-- **FFmpeg** con codecs `dca` y `ac3`
+- **Python 3** with [`mido`](https://github.com/mido/mido) (`pip install mido`)
+- **FluidSynth** with a SoundFont (e.g. `Musyng Kite.sf2`)
+- **FFmpeg** with `dca` and `ac3` codecs
 
-## Uso
+## Usage
 
 ```bash
 npm install
 npm run dev
 ```
 
-Abrir [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000).
 
-1. **Upload**: arrastrar o seleccionar un archivo `.mid`/`.midi`
-2. **Pistas**: elegir posición (adelante/central/atrás) y activar subwoofer por instrumento
-3. **Procesar**: genera WAVs por pista, mezcla 5.1, y codifica a DTS y AC3
-4. **Descargar**: links para bajar los archivos `.dts` y `.ac3`
+1. **Upload**: drag & drop or select a `.mid`/`.midi` file
+2. **Tracks**: set position (front/center/rear) and enable subwoofer per instrument
+3. **Process**: generates per-track WAVs, mixes 5.1, and encodes to DTS and AC3
+4. **Download**: links to download `.dts` and `.ac3` files
 
 ## Pipeline
 
-1. `fluidsynth` renderiza cada pista a WAV
-2. Mezcla canales frontales (stéreo), central (mono), traseros (stéreo)
-3. Extrae subwoofer (low-pass 120Hz)
-4. Combina en 5.1 y codifica a DTS (dca 1536k) y AC3 (640k)
+1. `fluidsynth` renders each track to WAV
+2. Mixes front (stereo), center (mono), rear (stereo) channels
+3. Extracts subwoofer (low-pass 120Hz)
+4. Combines into 5.1 and encodes to DTS (dca 1536k) and AC3 (640k)

@@ -12,7 +12,7 @@ export default function UploadPage() {
 
   const uploadFile = useCallback(async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.mid') && !file.name.toLowerCase().endsWith('.midi')) {
-      setError('Solo archivos MIDI (.mid, .midi)')
+      setError('Only MIDI files (.mid, .midi)')
       return
     }
 
@@ -25,10 +25,10 @@ export default function UploadPage() {
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: formData })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error al subir')
+      if (!res.ok) throw new Error(data.error || 'Upload failed')
       router.push(`/midi/${data.id}/tracks`)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error al subir archivo')
+      setError(e instanceof Error ? e.message : 'Upload error')
       setUploading(false)
     }
   }, [router])
@@ -63,7 +63,7 @@ export default function UploadPage() {
       <div className="w-full max-w-md text-center mb-8">
         <h1 className="text-3xl font-bold mb-2">Midiar</h1>
         <p className="text-zinc-500 dark:text-zinc-400">
-          Subí un archivo MIDI para convertirlo a DTS/AC3 5.1
+          Upload a MIDI file to convert it to DTS/AC3 5.1
         </p>
       </div>
 
@@ -92,7 +92,7 @@ export default function UploadPage() {
         {uploading ? (
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-zinc-500">Subiendo archivo...</p>
+            <p className="text-zinc-500">Uploading file...</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3">
@@ -102,7 +102,7 @@ export default function UploadPage() {
               />
             </svg>
             <p className="text-zinc-500 dark:text-zinc-400">
-              Arrastrá un archivo MIDI acá o hacé clic para seleccionar
+              Drop a MIDI file here or click to select
             </p>
             <p className="text-xs text-zinc-400">.mid o .midi</p>
           </div>
@@ -113,7 +113,7 @@ export default function UploadPage() {
         onClick={openFilePicker}
         className="mt-4 px-6 py-2 bg-zinc-800 dark:bg-zinc-200 text-white dark:text-black rounded-lg font-medium hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
       >
-        Seleccionar archivo MIDI
+        Select MIDI file
       </button>
 
       {error && (

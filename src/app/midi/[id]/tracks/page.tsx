@@ -73,10 +73,10 @@ export default function TracksPage() {
         body: JSON.stringify({ selections }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error al iniciar proceso')
+      if (!res.ok) throw new Error(data.error || 'Failed to start processing')
       router.push(`/midi/${id}/process`)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error desconocido')
+      setError(e instanceof Error ? e.message : 'Unknown error')
       setSubmitting(false)
     }
   }
@@ -101,9 +101,9 @@ export default function TracksPage() {
 
   return (
     <div className="flex flex-col flex-1 p-6 max-w-3xl mx-auto w-full">
-      <h1 className="text-2xl font-bold mb-1">Instrumentos / Pistas</h1>
+      <h1 className="text-2xl font-bold mb-1">Instruments / Tracks</h1>
       <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">
-        Seleccioná la posición de cada pista y marcá las que deben ir al subwoofer
+        Select each track&apos;s position and check those that should go to the subwoofer
       </p>
 
       <div className="space-y-3 flex-1">
@@ -122,17 +122,17 @@ export default function TracksPage() {
                   </span>
                   {track.is_drum && (
                     <span className="ml-2 text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded">
-                      Batería
+                      Drums
                     </span>
                   )}
                 </div>
                 <span className="text-xs text-zinc-400">
-                  CH {track.channel} · {track.note_count} notas
+                  CH {track.channel} · {track.note_count} notes
                 </span>
               </div>
 
               <div className="flex items-center gap-4">
-                <span className="text-sm text-zinc-500">Posición:</span>
+                <span className="text-sm text-zinc-500">Position:</span>
                 {(['front', 'center', 'rear'] as const).map((pos) => (
                   <label key={pos} className="flex items-center gap-1.5 cursor-pointer">
                     <input
@@ -143,7 +143,7 @@ export default function TracksPage() {
                       className="accent-blue-500"
                     />
                     <span className="text-sm capitalize">
-                      {pos === 'front' ? 'Adelante' : pos === 'center' ? 'Central' : 'Atrás'}
+                      {pos === 'front' ? 'Front' : pos === 'center' ? 'Center' : 'Rear'}
                     </span>
                   </label>
                 ))}
@@ -169,7 +169,7 @@ export default function TracksPage() {
           disabled={submitting}
           className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {submitting ? 'Iniciando...' : 'Comenzar procesado'}
+          {submitting ? 'Starting...' : 'Start processing'}
         </button>
       </div>
     </div>

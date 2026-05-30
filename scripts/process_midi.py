@@ -31,7 +31,7 @@ def fail(error):
     sys.exit(1)
 
 def done():
-    write_status({"status": "completed", "step": 0, "total": 0, "label": "Completado"})
+    write_status({"status": "completed", "step": 0, "total": 0, "label": "Complete"})
 
 def run_cmd(cmd, desc):
     log(f"Running: {' '.join(cmd)}")
@@ -66,7 +66,7 @@ def process_midi(midi_path, output_dir, selections):
     for i, sel in enumerate(selections):
         current_step += 1
         ch = sel["channel"]
-        label = f"Generando WAV: {sel.get('name', f'Track {ch}')}"
+        label = f"Generating WAV: {sel.get('name', f'Track {ch}')}"
         progress(current_step, total_steps, label)
         wav_path = os.path.join(wavs_dir, f"track_{i}.wav")
         try:
@@ -75,7 +75,7 @@ def process_midi(midi_path, output_dir, selections):
             fail(f"Error rendering track {i}: {e}")
 
     current_step += 1
-    progress(current_step, total_steps, "Mezclando canales frontales (L/R)")
+    progress(current_step, total_steps, "Mixing front channels (L/R)")
     front_tracks = [wavs_dir + f"/track_{i}.wav" for i, s in enumerate(selections) if s["position"] == "front"]
     if front_tracks:
         mix_stereo(front_tracks, os.path.join(mixes_dir, "front.wav"))
@@ -83,7 +83,7 @@ def process_midi(midi_path, output_dir, selections):
         create_silent_wav(os.path.join(mixes_dir, "front.wav"), 2)
 
     current_step += 1
-    progress(current_step, total_steps, "Mezclando canal central")
+    progress(current_step, total_steps, "Mixing center channel")
     center_tracks = [wavs_dir + f"/track_{i}.wav" for i, s in enumerate(selections) if s["position"] == "center"]
     if center_tracks:
         mix_mono(center_tracks, os.path.join(mixes_dir, "center.wav"))
@@ -91,7 +91,7 @@ def process_midi(midi_path, output_dir, selections):
         create_silent_wav(os.path.join(mixes_dir, "center.wav"), 1)
 
     current_step += 1
-    progress(current_step, total_steps, "Mezclando canales traseros (L/R)")
+    progress(current_step, total_steps, "Mixing rear channels (L/R)")
     rear_tracks = [wavs_dir + f"/track_{i}.wav" for i, s in enumerate(selections) if s["position"] == "rear"]
     if rear_tracks:
         mix_stereo(rear_tracks, os.path.join(mixes_dir, "rear.wav"))
@@ -99,7 +99,7 @@ def process_midi(midi_path, output_dir, selections):
         create_silent_wav(os.path.join(mixes_dir, "rear.wav"), 2)
 
     current_step += 1
-    progress(current_step, total_steps, "Extrayendo subwoofer (LFE)")
+    progress(current_step, total_steps, "Extracting subwoofer (LFE)")
     sub_tracks = [wavs_dir + f"/track_{i}.wav" for i, s in enumerate(selections) if s.get("subwoofer", False)]
     if sub_tracks:
         extract_subwoofer(sub_tracks, os.path.join(mixes_dir, "sub.wav"))
@@ -107,11 +107,11 @@ def process_midi(midi_path, output_dir, selections):
         create_silent_wav(os.path.join(mixes_dir, "sub.wav"), 1)
 
     current_step += 1
-    progress(current_step, total_steps, "Generando mezcla DTS 5.1")
+    progress(current_step, total_steps, "Generating DTS 5.1 mix")
     generate_dts(mixes_dir, os.path.join(final_dir, "output.dts"))
 
     current_step += 1
-    progress(current_step, total_steps, "Generando mezcla AC3 5.1")
+    progress(current_step, total_steps, "Generating AC3 5.1 mix")
     generate_ac3(mixes_dir, os.path.join(final_dir, "output.ac3"))
 
     done()
@@ -280,7 +280,7 @@ if __name__ == "__main__":
 
     STATUS_FILE = os.path.join(output_dir, "status.json")
 
-    write_status({"status": "pending", "step": 0, "total": len(selections) + 6, "label": "Iniciando..."})
+    write_status({"status": "pending", "step": 0, "total": len(selections) + 6, "label": "Starting..."})
 
     try:
         process_midi(midi_path, output_dir, selections)
