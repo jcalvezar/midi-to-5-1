@@ -5,7 +5,7 @@ import subprocess
 
 import pathlib
 SCRIPT_DIR = pathlib.Path(__file__).parent.resolve()
-SOUNDFONT = str(SCRIPT_DIR.parent / "Musyng Kite.sf2")
+SOUNDFONT = str(SCRIPT_DIR.parent.parent / "Musyng Kite.sf2")
 SAMPLE_RATE = "48000"
 
 STATUS_FILE = None
