@@ -315,6 +315,8 @@ if __name__ == "__main__":
     output_dir = sys.argv[2]
     selections = json.loads(sys.argv[3])
 
+    os.makedirs(output_dir, exist_ok=True)
+
     STATUS_FILE = os.path.join(output_dir, "status.json")
 
     steps = build_steps(selections)
