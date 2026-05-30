@@ -273,8 +273,8 @@ def generate_dts(mixes_dir, output_path):
     fc = (
         f"[0:a]atrim=0:{max_dur}[a0];[1:a]atrim=0:{max_dur}[a1];"
         f"[2:a]atrim=0:{max_dur}[a2];[3:a]atrim=0:{max_dur}[a3];"
-        f"[a0][a1][a2][a3]amerge=inputs=4,pan=5.1(side)"
-        f"|FL=FL|FR=FR|FC=c2|LFE=c4|BL=c5|BR=c6[m]"
+        f"[a0][a1][a2][a3]amerge=inputs=4,"
+        f"pan=5.1(side)|FL=c0|FR=c1|FC=c2|LFE=c3|BL=c4|BR=c5[m]"
     )
     run_cmd(["ffmpeg", "-y", *inputs, "-filter_complex", fc,
              "-map", "[m]", "-c:a", "pcm_s16le", "-ar", SAMPLE_RATE, temp_51], "Create 5.1 WAV")
@@ -309,8 +309,8 @@ def generate_ac3(mixes_dir, output_path):
     fc = (
         f"[0:a]atrim=0:{max_dur}[a0];[1:a]atrim=0:{max_dur}[a1];"
         f"[2:a]atrim=0:{max_dur}[a2];[3:a]atrim=0:{max_dur}[a3];"
-        f"[a0][a1][a2][a3]amerge=inputs=4,pan=5.1(side)"
-        f"|FL=FL|FR=FR|FC=c2|LFE=c4|BL=c5|BR=c6[m]"
+        f"[a0][a1][a2][a3]amerge=inputs=4,"
+        f"pan=5.1(side)|FL=c0|FR=c1|FC=c2|LFE=c3|BL=c4|BR=c5[m]"
     )
     run_cmd(["ffmpeg", "-y", *inputs, "-filter_complex", fc,
              "-map", "[m]", "-c:a", "pcm_s16le", "-ar", SAMPLE_RATE, temp_51], "Create 5.1 WAV")
