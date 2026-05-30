@@ -9,29 +9,56 @@ SOUNDFONT = str(SCRIPT_DIR.parent / "Musyng Kite.sf2")
 SAMPLE_RATE = "48000"
 
 STATUS_FILE = None
+steps = []
 
-def write_status(data):
+
+def build_steps(selections):
+    s = []
+    for sel in selections:
+        ch = sel["channel"]
+        s.append({"label": f"Generating WAV: {sel.get('name', f'Track {ch}')}", "status": "pending"})
+    s.append({"label": "Mixing front channels (L/R)", "status": "pending"})
+    s.append({"label": "Mixing center channel", "status": "pending"})
+    s.append({"label": "Mixing rear channels (L/R)", "status": "pending"})
+    s.append({"label": "Extracting subwoofer (LFE)", "status": "pending"})
+    s.append({"label": "Generating DTS 5.1 mix", "status": "pending"})
+    s.append({"label": "Generating AC3 5.1 mix", "status": "pending"})
+    return s
+
+
+def flush_status(overall, current_step, total):
+    label = steps[current_step - 1]["label"] if 0 < current_step <= len(steps) else ""
+    data = {"status": overall, "step": current_step, "total": total, "label": label, "steps": steps}
+    if overall == "error":
+        data["error"] = label or "Unknown error"
     with open(STATUS_FILE, "w") as f:
         json.dump(data, f)
 
+
 def log(msg):
-    st = {"status": "processing", "step": 0, "total": 0, "label": msg}
-    write_status(st)
     print(json.dumps({"type": "log", "message": msg}), flush=True)
 
-def progress(step, total, label):
-    st = {"status": "processing", "step": step, "total": total, "label": label}
-    write_status(st)
-    print(json.dumps({"type": "progress", "step": step, "total": total, "label": label}), flush=True)
+
+def progress(step_idx, total, label):
+    if step_idx > 1:
+        steps[step_idx - 2]["status"] = "completed"
+    steps[step_idx - 1]["status"] = "processing"
+    flush_status("processing", step_idx, total)
+    print(json.dumps({"type": "progress", "step": step_idx, "total": total, "label": label}), flush=True)
+
 
 def fail(error):
-    st = {"status": "error", "step": 0, "total": 0, "label": "", "error": str(error)}
-    write_status(st)
+    steps[-1]["status"] = "error"
+    flush_status("error", 0, 0)
     print(json.dumps({"type": "error", "message": str(error)}), flush=True)
     sys.exit(1)
 
+
 def done():
-    write_status({"status": "completed", "step": 0, "total": 0, "label": "Complete"})
+    steps[-1]["status"] = "completed"
+    flush_status("completed", 0, 0)
+    print(json.dumps({"type": "done"}), flush=True)
+
 
 def run_cmd(cmd, desc):
     log(f"Running: {' '.join(cmd)}")
@@ -41,15 +68,17 @@ def run_cmd(cmd, desc):
         fail(f"{desc} failed: {result.stderr}")
     return result.stdout
 
+
 def render_track(midi_path, output_wav):
     if not os.path.exists(SOUNDFONT):
         fail(f"Soundfont not found: {SOUNDFONT}")
     cmd = [
         "fluidsynth", "-F", output_wav, "-r", SAMPLE_RATE,
         "-g", "1.0", "-a", "float",
-        SOUNDFONT, midi_path
+        SOUNDFONT, midi_path,
     ]
     run_cmd(cmd, "FluidSynth render")
+
 
 def process_midi(midi_path, output_dir, selections):
     os.makedirs(output_dir, exist_ok=True)
@@ -60,72 +89,73 @@ def process_midi(midi_path, output_dir, selections):
     os.makedirs(mixes_dir, exist_ok=True)
     os.makedirs(final_dir, exist_ok=True)
 
-    total_steps = len(selections) + 6
-    current_step = 0
+    total = len(steps)
+    current = 0
 
     for i, sel in enumerate(selections):
-        current_step += 1
-        ch = sel["channel"]
-        label = f"Generating WAV: {sel.get('name', f'Track {ch}')}"
-        progress(current_step, total_steps, label)
+        current += 1
+        label = steps[current - 1]["label"]
+        progress(current, total, label)
         wav_path = os.path.join(wavs_dir, f"track_{i}.wav")
         try:
             render_track(midi_path, wav_path)
         except Exception as e:
             fail(f"Error rendering track {i}: {e}")
 
-    current_step += 1
-    progress(current_step, total_steps, "Mixing front channels (L/R)")
+    current += 1
+    progress(current, total, steps[current - 1]["label"])
     front_tracks = [wavs_dir + f"/track_{i}.wav" for i, s in enumerate(selections) if s["position"] == "front"]
     if front_tracks:
         mix_stereo(front_tracks, os.path.join(mixes_dir, "front.wav"))
     else:
         create_silent_wav(os.path.join(mixes_dir, "front.wav"), 2)
 
-    current_step += 1
-    progress(current_step, total_steps, "Mixing center channel")
+    current += 1
+    progress(current, total, steps[current - 1]["label"])
     center_tracks = [wavs_dir + f"/track_{i}.wav" for i, s in enumerate(selections) if s["position"] == "center"]
     if center_tracks:
         mix_mono(center_tracks, os.path.join(mixes_dir, "center.wav"))
     else:
         create_silent_wav(os.path.join(mixes_dir, "center.wav"), 1)
 
-    current_step += 1
-    progress(current_step, total_steps, "Mixing rear channels (L/R)")
+    current += 1
+    progress(current, total, steps[current - 1]["label"])
     rear_tracks = [wavs_dir + f"/track_{i}.wav" for i, s in enumerate(selections) if s["position"] == "rear"]
     if rear_tracks:
         mix_stereo(rear_tracks, os.path.join(mixes_dir, "rear.wav"))
     else:
         create_silent_wav(os.path.join(mixes_dir, "rear.wav"), 2)
 
-    current_step += 1
-    progress(current_step, total_steps, "Extracting subwoofer (LFE)")
+    current += 1
+    progress(current, total, steps[current - 1]["label"])
     sub_tracks = [wavs_dir + f"/track_{i}.wav" for i, s in enumerate(selections) if s.get("subwoofer", False)]
     if sub_tracks:
         extract_subwoofer(sub_tracks, os.path.join(mixes_dir, "sub.wav"))
     else:
         create_silent_wav(os.path.join(mixes_dir, "sub.wav"), 1)
 
-    current_step += 1
-    progress(current_step, total_steps, "Generating DTS 5.1 mix")
+    current += 1
+    progress(current, total, steps[current - 1]["label"])
     generate_dts(mixes_dir, os.path.join(final_dir, "output.dts"))
 
-    current_step += 1
-    progress(current_step, total_steps, "Generating AC3 5.1 mix")
+    current += 1
+    progress(current, total, steps[current - 1]["label"])
     generate_ac3(mixes_dir, os.path.join(final_dir, "output.ac3"))
 
     done()
+
 
 def get_wav_duration(wav_path):
     result = subprocess.run([
         "ffprobe", "-v", "error", "-show_entries",
         "format=duration", "-of", "default=noprint_wrappers=1:nokey=1",
-        wav_path
+        wav_path,
     ], capture_output=True, text=True)
     try:
         return float(result.stdout.strip())
     except:
         return 0
+
 
 def get_max_duration(wav_paths):
     max_dur = 0
@@ -135,6 +165,7 @@ def get_max_duration(wav_paths):
             if dur > max_dur:
                 max_dur = dur
     return max_dur if max_dur > 0 else 10
+
 
 def mix_stereo(input_wavs, output_wav):
     existing = [w for w in input_wavs if os.path.exists(w)]
@@ -158,6 +189,7 @@ def mix_stereo(input_wavs, output_wav):
            "-map", "[m]", "-ac", "2", "-ar", SAMPLE_RATE, output_wav]
     run_cmd(cmd, "Stereo mix")
 
+
 def mix_mono(input_wavs, output_wav):
     existing = [w for w in input_wavs if os.path.exists(w)]
     if not existing:
@@ -173,6 +205,7 @@ def mix_mono(input_wavs, output_wav):
     cmd = ["ffmpeg", "-y", *mix_inputs, "-filter_complex", filter_str,
            "-map", "[m]", "-ac", "1", "-ar", SAMPLE_RATE, output_wav]
     run_cmd(cmd, "Mono mix")
+
 
 def extract_subwoofer(input_wavs, output_wav):
     existing = [w for w in input_wavs if os.path.exists(w)]
@@ -193,10 +226,12 @@ def extract_subwoofer(input_wavs, output_wav):
            "-map", "[m]", "-ac", "1", "-ar", SAMPLE_RATE, output_wav]
     run_cmd(cmd, "Subwoofer extract")
 
+
 def create_silent_wav(output_wav, channels):
     cmd = ["ffmpeg", "-y", "-f", "lavfi", "-i", f"anullsrc=r={SAMPLE_RATE}:cl=mono",
            "-ac", str(channels), "-ar", SAMPLE_RATE, "-t", "1", output_wav]
     run_cmd(cmd, "Silent WAV")
+
 
 def generate_dts(mixes_dir, output_path):
     temp_51 = os.path.join(mixes_dir, "temp_51.wav")
@@ -233,6 +268,7 @@ def generate_dts(mixes_dir, output_path):
     run_cmd(["ffmpeg", "-y", "-i", temp_51, "-c:a", "dca",
              "-strict", "experimental", "-b:a", "1536k", "-ar", SAMPLE_RATE, output_path], "DTS encode")
 
+
 def generate_ac3(mixes_dir, output_path):
     temp_51 = os.path.join(mixes_dir, "temp_51_ac3.wav")
     ch_map = {
@@ -268,6 +304,7 @@ def generate_ac3(mixes_dir, output_path):
     run_cmd(["ffmpeg", "-y", "-i", temp_51, "-c:a", "ac3",
              "-b:a", "640k", "-ar", SAMPLE_RATE, output_path], "AC3 encode")
 
+
 if __name__ == "__main__":
     if len(sys.argv) < 4:
         msg = "Usage: process_midi.py <midi_path> <output_dir> <selections_json>"
@@ -280,7 +317,8 @@ if __name__ == "__main__":
 
     STATUS_FILE = os.path.join(output_dir, "status.json")
 
-    write_status({"status": "pending", "step": 0, "total": len(selections) + 6, "label": "Starting..."})
+    steps = build_steps(selections)
+    flush_status("pending", 0, len(steps))
 
     try:
         process_midi(midi_path, output_dir, selections)

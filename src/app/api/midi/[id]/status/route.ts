@@ -11,14 +11,14 @@ export async function GET(
   const statusFile = path.join(process.cwd(), 'uploads', id, 'output', 'status.json')
 
   if (!existsSync(statusFile)) {
-    return NextResponse.json({ status: 'pending', step: 0, total: 0, label: 'Iniciando...' })
+    return NextResponse.json({ status: 'pending', step: 0, total: 0, label: 'Starting...' })
   }
 
   let status: Record<string, unknown>
   try {
     status = JSON.parse(readFileSync(statusFile, 'utf-8'))
   } catch {
-    return NextResponse.json({ status: 'pending', step: 0, total: 0, label: 'Iniciando...' })
+    return NextResponse.json({ status: 'pending', step: 0, total: 0, label: 'Starting...' })
   }
 
   if (status.status === 'completed') {
