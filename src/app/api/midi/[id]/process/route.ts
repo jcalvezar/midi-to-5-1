@@ -21,7 +21,7 @@ export async function POST(
 ) {
   const { id } = await params
   const body = await request.json()
-  const { selections } = body as { selections: Selection[] }
+  const { selections, soundfont } = body as { selections: Selection[]; soundfont?: string }
 
   if (!selections || !Array.isArray(selections) || selections.length === 0) {
     return NextResponse.json({ error: 'No track selections provided' }, { status: 400 })
@@ -39,8 +39,9 @@ export async function POST(
   const outputDir = path.join(uploadDir, 'output')
   const scriptPath = path.join(process.cwd(), 'scripts', 'process_midi.py')
   const selectionsJson = JSON.stringify(selections)
+  const sfArg = soundfont || ''
 
-  const child = spawn('python3', [scriptPath, midiFiles[0], outputDir, selectionsJson], {
+  const child = spawn('python3', [scriptPath, midiFiles[0], outputDir, selectionsJson, sfArg], {
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 600000,
   })

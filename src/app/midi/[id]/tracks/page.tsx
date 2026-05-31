@@ -23,6 +23,11 @@ type Selection = {
   subwoofer: boolean
 }
 
+type SoundFont = {
+  name: string
+  path: string
+}
+
 export default function TracksPage() {
   const params = useParams()
   const router = useRouter()
@@ -32,16 +37,26 @@ export default function TracksPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selections, setSelections] = useState<Selection[]>([])
+  const [soundfonts, setSoundfonts] = useState<SoundFont[]>([])
+  const [selectedSf, setSelectedSf] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [sfUploading, setSfUploading] = useState(false)
+
+  const loadSoundfonts = () =>
+    fetch('/api/soundfonts')
+      .then((r) => r.json())
+      .then((d) => setSoundfonts(d.soundfonts || []))
 
   useEffect(() => {
-    fetch(`/api/midi/${id}/tracks`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.error) throw new Error(data.error)
-        setTracks(data.tracks)
+    Promise.all([
+      fetch(`/api/midi/${id}/tracks`).then((r) => r.json()),
+      loadSoundfonts(),
+    ])
+      .then(([trackData]) => {
+        if (trackData.error) throw new Error(trackData.error)
+        setTracks(trackData.tracks)
         setSelections(
-          data.tracks.map((t: Track) => ({
+          trackData.tracks.map((t: Track) => ({
             track: t.track,
             name: t.name,
             channel: t.channel,
@@ -70,7 +85,7 @@ export default function TracksPage() {
       const res = await fetch(`/api/midi/${id}/process`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selections }),
+        body: JSON.stringify({ selections, soundfont: selectedSf || undefined }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to start processing')
@@ -105,6 +120,42 @@ export default function TracksPage() {
       <p className="text-zinc-500 dark:text-zinc-400 mb-6 text-sm">
         Select each track&apos;s position and check those that should go to the subwoofer
       </p>
+
+      <div className="mb-6 p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg space-y-3">
+        <label className="flex items-center gap-3">
+          <span className="text-sm font-medium">SoundFont:</span>
+          <select
+            value={selectedSf}
+            onChange={(e) => setSelectedSf(e.target.value)}
+            className="flex-1 px-3 py-1.5 text-sm border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-900"
+          >
+            <option value="">Default (Musyng Kite)</option>
+            {soundfonts.map((sf) => (
+              <option key={sf.name} value={sf.path}>{sf.name}</option>
+            ))}
+          </select>
+        </label>
+        <div className="flex items-center gap-3">
+          <input
+            type="file"
+            accept=".sf2"
+            disabled={sfUploading}
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              setSfUploading(true)
+              const fd = new FormData()
+              fd.append('file', file)
+              await fetch('/api/soundfonts', { method: 'POST', body: fd })
+              await loadSoundfonts()
+              setSfUploading(false)
+              e.target.value = ''
+            }}
+            className="text-sm text-zinc-500 file:mr-2 file:px-3 file:py-1 file:text-sm file:border file:border-zinc-300 dark:file:border-zinc-700 file:rounded-lg file:bg-white dark:file:bg-zinc-900 file:cursor-pointer"
+          />
+          {sfUploading && <span className="text-sm text-zinc-400">Uploading...</span>}
+        </div>
+      </div>
 
       <div className="space-y-3 flex-1">
         {tracks.map((track, i) => {
