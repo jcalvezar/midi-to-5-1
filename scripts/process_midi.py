@@ -55,8 +55,9 @@ def build_steps(selections):
     s.append({"label": "Mixing rear channels (L/R)", "status": "pending"})
     s.append({"label": "Extracting subwoofer (LFE)", "status": "pending"})
     s.append({"label": "Extracting 5.1 channel WAVs", "status": "pending"})
-    s.append({"label": "Generating DTS 5.1 mix", "status": "pending"})
-    s.append({"label": "Generating AC3 5.1 mix", "status": "pending"})
+    s.append({"label": "Assembling 5.1 WAV", "status": "pending"})
+    s.append({"label": "Encoding DTS 5.1", "status": "pending"})
+    s.append({"label": "Encoding AC3 5.1", "status": "pending"})
     return s
 
 
@@ -215,11 +216,21 @@ def process_midi(midi_path, output_dir, selections, base_name="output"):
 
     current += 1
     progress(current, total, steps[current - 1]["label"])
-    generate_dts(mixes_dir, os.path.join(final_dir, f"{base_name}.dts"))
+    temp_51 = os.path.join(mixes_dir, "temp_51.wav")
+    max_dur = get_max_duration([
+        os.path.join(mixes_dir, f) for f in ["FL.wav", "FR.wav", "center.wav", "sub.wav", "SL.wav", "SR.wav"]
+    ])
+    if max_dur <= 0:
+        max_dur = 10
+    assemble_51(mixes_dir, temp_51, max_dur)
 
     current += 1
     progress(current, total, steps[current - 1]["label"])
-    generate_ac3(mixes_dir, os.path.join(final_dir, f"{base_name}.ac3"))
+    encode_dts(temp_51, os.path.join(final_dir, f"{base_name}.dts"))
+
+    current += 1
+    progress(current, total, steps[current - 1]["label"])
+    encode_ac3(temp_51, os.path.join(final_dir, f"{base_name}.ac3"))
 
     done()
 
@@ -339,29 +350,13 @@ def assemble_51(mixes_dir, output_wav, max_dur):
             os.remove(tp)
 
 
-def generate_dts(mixes_dir, output_path):
-    temp_51 = os.path.join(mixes_dir, "temp_51.wav")
-    max_dur = get_max_duration([
-        os.path.join(mixes_dir, f)
-        for f in ["front.wav", "center.wav", "rear.wav", "sub.wav"]
-    ])
-    if max_dur <= 0:
-        max_dur = 10
-    assemble_51(mixes_dir, temp_51, max_dur)
-    run_cmd(["ffmpeg", "-y", "-channel_layout", "5.1", "-i", temp_51, "-c:a", "dca",
+def encode_dts(input_wav, output_path):
+    run_cmd(["ffmpeg", "-y", "-channel_layout", "5.1", "-i", input_wav, "-c:a", "dca",
              "-strict", "experimental", "-b:a", "1536k", "-ar", SAMPLE_RATE, output_path], "DTS encode")
 
 
-def generate_ac3(mixes_dir, output_path):
-    temp_51 = os.path.join(mixes_dir, "temp_51_ac3.wav")
-    max_dur = get_max_duration([
-        os.path.join(mixes_dir, f)
-        for f in ["front.wav", "center.wav", "rear.wav", "sub.wav"]
-    ])
-    if max_dur <= 0:
-        max_dur = 10
-    assemble_51(mixes_dir, temp_51, max_dur)
-    run_cmd(["ffmpeg", "-y", "-channel_layout", "5.1", "-i", temp_51, "-c:a", "ac3",
+def encode_ac3(input_wav, output_path):
+    run_cmd(["ffmpeg", "-y", "-channel_layout", "5.1", "-i", input_wav, "-c:a", "ac3",
              "-b:a", "640k", "-ar", SAMPLE_RATE, output_path], "AC3 encode")
 
 
