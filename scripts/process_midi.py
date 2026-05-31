@@ -283,7 +283,7 @@ def mix_mono(input_wavs, output_wav):
     for w in existing:
         mix_inputs.extend(["-i", w])
     ch = len(existing)
-    filter_str = f"amix=inputs={ch}:duration=longest,pan=mono|c0=c0+c1[m]"
+    filter_str = f"amix=inputs={ch}:duration=longest,pan=mono|c0=0.5*c0+0.5*c1[m]"
     cmd = ["ffmpeg", "-y", *mix_inputs, "-filter_complex", filter_str,
            "-map", "[m]", "-ac", "1", "-ar", SAMPLE_RATE, output_wav]
     run_cmd(cmd, "Mono mix")
@@ -298,7 +298,7 @@ def extract_subwoofer(input_wavs, output_wav):
     for w in existing:
         mix_inputs.extend(["-i", w])
     ch = len(existing)
-    filter_str = f"amix=inputs={ch}:duration=longest,pan=mono|c0=c0+c1,lowpass=f=120,volume=1.5[m]"
+    filter_str = f"amix=inputs={ch}:duration=longest,pan=mono|c0=0.5*c0+0.5*c1,lowpass=f=120,volume=0.5[m]"
     cmd = ["ffmpeg", "-y", *mix_inputs, "-filter_complex", filter_str,
            "-map", "[m]", "-ac", "1", "-ar", SAMPLE_RATE, output_wav]
     run_cmd(cmd, "Subwoofer extract")
@@ -371,6 +371,8 @@ if __name__ == "__main__":
     midi_path = sys.argv[1]
     output_dir = sys.argv[2]
     selections = json.loads(sys.argv[3])
+    if len(sys.argv) > 4 and sys.argv[4]:
+        SOUNDFONT = sys.argv[4]
 
     os.makedirs(output_dir, exist_ok=True)
 
