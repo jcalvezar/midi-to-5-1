@@ -51,23 +51,29 @@ export default function TracksPage() {
   useEffect(() => {
     Promise.all([
       fetch(`/api/midi/${id}/tracks`).then((r) => r.json()),
+      fetch(`/api/midi/${id}/selections`).then((r) => r.json()),
       loadSoundfonts(),
     ])
-      .then(([trackData]) => {
+      .then(([trackData, savedSel]) => {
         if (trackData.error) throw new Error(trackData.error)
         setTracks(trackData.tracks)
-        setSelections(
-          trackData.tracks.map((t: Track) => ({
-            track: t.track,
-            name: t.name,
-            channel: t.channel,
-            program: t.program,
-            is_drum: t.is_drum,
-            position: 'center' as const,
-            subwoofer: t.is_drum,
-            volume: 100,
-          }))
-        )
+        if (savedSel.selections) {
+          setSelections(savedSel.selections)
+          if (savedSel.soundfont) setSelectedSf(savedSel.soundfont)
+        } else {
+          setSelections(
+            trackData.tracks.map((t: Track) => ({
+              track: t.track,
+              name: t.name,
+              channel: t.channel,
+              program: t.program,
+              is_drum: t.is_drum,
+              position: 'center' as const,
+              subwoofer: t.is_drum,
+              volume: 100,
+            }))
+          )
+        }
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))

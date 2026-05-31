@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { spawn } from 'child_process'
 import path from 'path'
-import { existsSync } from 'fs'
+import { existsSync, writeFileSync } from 'fs'
 
 type Selection = {
   track: number
@@ -36,6 +36,8 @@ export async function POST(
   if (midiFiles.length === 0) {
     return NextResponse.json({ error: 'MIDI file not found' }, { status: 404 })
   }
+
+  writeFileSync(path.join(uploadDir, 'selections.json'), JSON.stringify({ selections, soundfont }))
 
   const outputDir = path.join(uploadDir, 'output')
   const scriptPath = path.join(process.cwd(), 'scripts', 'process_midi.py')
