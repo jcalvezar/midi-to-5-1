@@ -61,7 +61,8 @@ def parse_midi(filepath):
             elif msg.type == 'program_change':
                 ch = msg.channel
                 if ch not in per_channel:
-                    per_channel[ch] = {"program": msg.program, "note_count": 0}
+                    per_channel[ch] = {"program": 0, "note_count": 0}
+                per_channel[ch]["program"] = msg.program
             elif msg.type == 'note_on' and msg.velocity > 0:
                 ch = msg.channel
                 if ch not in per_channel:
