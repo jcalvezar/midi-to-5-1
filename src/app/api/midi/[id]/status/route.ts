@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { readFileSync, existsSync } from 'fs'
+import { readdirSync, readFileSync, existsSync } from 'fs'
 import path from 'path'
 
 export async function GET(
@@ -9,11 +9,6 @@ export async function GET(
   const { id } = await params
 
   const uploadDir = path.join(process.cwd(), 'uploads', id)
-  const metaPath = path.join(uploadDir, 'meta.json')
-  const baseName = existsSync(metaPath)
-    ? (() => { try { return JSON.parse(readFileSync(metaPath, 'utf-8')).baseName } catch { return 'output' } })()
-    : 'output'
-
   const statusFile = path.join(uploadDir, 'output', 'status.json')
 
   if (!existsSync(statusFile)) {
@@ -29,10 +24,16 @@ export async function GET(
 
   if (status.status === 'completed') {
     const finalDir = path.join(uploadDir, 'output', 'final')
-    status.files = {
-      dts: existsSync(path.join(finalDir, `${baseName}.dts`)) ? `/api/midi/${id}/download/dts` : null,
-      ac3: existsSync(path.join(finalDir, `${baseName}.ac3`)) ? `/api/midi/${id}/download/ac3` : null,
+    let dtsPath: string | null = null
+    let ac3Path: string | null = null
+    if (existsSync(finalDir)) {
+      const files = readdirSync(finalDir)
+      for (const f of files) {
+        if (f.endsWith('.dts')) dtsPath = `/api/midi/${id}/download/dts`
+        if (f.endsWith('.ac3')) ac3Path = `/api/midi/${id}/download/ac3`
+      }
     }
+    status.files = { dts: dtsPath, ac3: ac3Path }
   }
 
   return NextResponse.json(status)
