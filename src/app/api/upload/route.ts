@@ -29,6 +29,12 @@ export async function POST(request: Request) {
     const bytes = await file.arrayBuffer()
     await writeFile(filepath, Buffer.from(bytes))
 
+    const baseName = path.parse(file.name).name
+    await writeFile(
+      path.join(jobDir, 'meta.json'),
+      JSON.stringify({ originalName: file.name, baseName })
+    )
+
     return NextResponse.json({
       id,
       filename: file.name,

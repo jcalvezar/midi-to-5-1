@@ -93,7 +93,7 @@ def render_track(midi_path, output_wav):
     run_cmd(cmd, "FluidSynth render")
 
 
-def process_midi(midi_path, output_dir, selections):
+def process_midi(midi_path, output_dir, selections, base_name="output"):
     os.makedirs(output_dir, exist_ok=True)
     wavs_dir = os.path.join(output_dir, "wavs")
     mixes_dir = os.path.join(output_dir, "mixes")
@@ -149,11 +149,11 @@ def process_midi(midi_path, output_dir, selections):
 
     current += 1
     progress(current, total, steps[current - 1]["label"])
-    generate_dts(mixes_dir, os.path.join(final_dir, "output.dts"))
+    generate_dts(mixes_dir, os.path.join(final_dir, f"{base_name}.dts"))
 
     current += 1
     progress(current, total, steps[current - 1]["label"])
-    generate_ac3(mixes_dir, os.path.join(final_dir, "output.ac3"))
+    generate_ac3(mixes_dir, os.path.join(final_dir, f"{base_name}.ac3"))
 
     done()
 
@@ -330,12 +330,22 @@ if __name__ == "__main__":
 
     os.makedirs(output_dir, exist_ok=True)
 
+    meta_path = os.path.join(os.path.dirname(output_dir), "meta.json")
+    base_name = "output"
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path) as f:
+                meta = json.load(f)
+            base_name = meta.get("baseName", base_name)
+        except Exception:
+            pass
+
     STATUS_FILE = os.path.join(output_dir, "status.json")
 
     steps = build_steps(selections)
     flush_status("pending", 0, len(steps))
 
     try:
-        process_midi(midi_path, output_dir, selections)
+        process_midi(midi_path, output_dir, selections, base_name)
     except Exception as e:
         fail(str(e))

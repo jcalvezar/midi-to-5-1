@@ -8,7 +8,13 @@ export async function GET(
 ) {
   const { id } = await params
 
-  const statusFile = path.join(process.cwd(), 'uploads', id, 'output', 'status.json')
+  const uploadDir = path.join(process.cwd(), 'uploads', id)
+  const metaPath = path.join(uploadDir, 'meta.json')
+  const baseName = existsSync(metaPath)
+    ? (() => { try { return JSON.parse(readFileSync(metaPath, 'utf-8')).baseName } catch { return 'output' } })()
+    : 'output'
+
+  const statusFile = path.join(uploadDir, 'output', 'status.json')
 
   if (!existsSync(statusFile)) {
     return NextResponse.json({ status: 'pending', step: 0, total: 0, label: 'Starting...' })
@@ -22,10 +28,10 @@ export async function GET(
   }
 
   if (status.status === 'completed') {
-    const finalDir = path.join(process.cwd(), 'uploads', id, 'output', 'final')
+    const finalDir = path.join(uploadDir, 'output', 'final')
     status.files = {
-      dts: existsSync(path.join(finalDir, 'output.dts')) ? `/api/midi/${id}/download/dts` : null,
-      ac3: existsSync(path.join(finalDir, 'output.ac3')) ? `/api/midi/${id}/download/ac3` : null,
+      dts: existsSync(path.join(finalDir, `${baseName}.dts`)) ? `/api/midi/${id}/download/dts` : null,
+      ac3: existsSync(path.join(finalDir, `${baseName}.ac3`)) ? `/api/midi/${id}/download/ac3` : null,
     }
   }
 

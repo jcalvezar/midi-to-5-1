@@ -52,39 +52,40 @@ def parse_midi(filepath):
     tempo = 500000
     for i, track in enumerate(mid.tracks):
         track_name = f"Track {i}"
-        program = 0
-        channel = 0
-        note_count = 0
-        has_notes = False
-
+        per_channel = {}
         abs_time = 0
         for msg in track:
             abs_time += msg.time
             if msg.type == 'track_name' and msg.name:
                 track_name = msg.name
             elif msg.type == 'program_change':
-                program = msg.program
-                channel = msg.channel
+                ch = msg.channel
+                if ch not in per_channel:
+                    per_channel[ch] = {"program": msg.program, "note_count": 0}
             elif msg.type == 'note_on' and msg.velocity > 0:
-                has_notes = True
-                note_count += 1
+                ch = msg.channel
+                if ch not in per_channel:
+                    per_channel[ch] = {"program": 0, "note_count": 0}
+                per_channel[ch]["note_count"] += 1
             elif msg.type == 'set_tempo':
                 tempo = msg.tempo
 
-        if has_notes:
-            is_drum = (channel == DRUM_CHANNEL)
-            key = (track_name, channel)
+        for ch, info in per_channel.items():
+            if info["note_count"] == 0:
+                continue
+            is_drum = (ch == DRUM_CHANNEL)
+            key = (track_name, ch)
             if key not in seen:
                 seen.add(key)
-                inst_name = "Drums" if is_drum else get_instrument_name(program)
+                inst_name = "Drums" if is_drum else get_instrument_name(info["program"])
                 tracks.append({
                     "track": i,
                     "name": track_name,
                     "instrument": inst_name,
-                    "program": program,
-                    "channel": channel,
+                    "program": info["program"],
+                    "channel": ch,
                     "is_drum": is_drum,
-                    "note_count": note_count,
+                    "note_count": info["note_count"],
                 })
 
     bpm = mido.tempo2bpm(tempo)
