@@ -1,6 +1,6 @@
 # Midiar
 
-Web application that converts standard MIDI files into 5.1 surround sound DTS and AC3 audio files. Each instrument in the MIDI can be independently positioned (front, center, or rear) and routed to the subwoofer, creating an immersive listening experience from any multitrack MIDI.
+Web application that converts standard MIDI files into 5.1 surround sound DTS and AC3 audio files. Each instrument in the MIDI can be independently positioned (front, center, or rear), routed to the subwoofer, and have its volume adjusted, creating an immersive listening experience from any multitrack MIDI.
 
 ## Requirements
 
@@ -10,7 +10,7 @@ Web application that converts standard MIDI files into 5.1 surround sound DTS an
 - **FFmpeg** with `dca` and `ac3` codecs
 - **SoX** (for multi-channel WAV assembly)
 
-The SoundFont must be placed at `../Musyng Kite.sf2` relative to the project root (one level above).
+By default the project looks for `Musyng Kite.sf2` in the project root. Custom SoundFonts can be uploaded from the web UI.
 
 ## Usage
 
@@ -22,9 +22,22 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000).
 
 1. **Upload**: drag & drop or select a `.mid`/`.midi` file
-2. **Tracks**: the app parses the MIDI and lists every instrument found (by GM program number and channel). For each instrument, choose its position (front/center/rear) and toggle subwoofer
+2. **Tracks**: the app parses the MIDI and lists every instrument found (by GM program number and channel). For each instrument, choose its position (front/center/rear), toggle subwoofer, and adjust volume (0–150%). You can also pick or upload a SoundFont. All settings persist across visits.
 3. **Process**: starts the conversion pipeline. A progress bar shows each step (render, mix, encode)
-4. **Download**: once complete, links to download `.dts` (1536 kbps) and `.ac3` (640 kbps) files, which are named after the original MIDI file
+4. **Download**: once complete, links to download `.dts` (1536 kbps) and `.ac3` (640 kbps) files, named after the original MIDI file and the SoundFont used
+
+## Audio quality
+
+The entire chain runs at **48 kHz / 16-bit**. Details:
+
+| Step | Format |
+|------|--------|
+| FluidSynth render | 48 kHz, 32-bit float (internal), written as 16-bit WAV |
+| Per-track gain (FFmpeg `volume` filter) | 48 kHz, 16-bit PCM |
+| Padding, mixing, extraction (FFmpeg) | 48 kHz, 16-bit PCM |
+| 5.1 assembly (SoX `-b 16`) | 48 kHz, 16-bit PCM |
+| DTS encode | 48 kHz, 1536 kbps |
+| AC3 encode | 48 kHz, 640 kbps |
 
 ## Pipeline
 
@@ -36,25 +49,34 @@ The original MIDI is read with `mido`. For each selected instrument channel, a t
 Delta times are recalculated from absolute tick positions, so timing is preserved even when events from other channels are removed.
 
 ### 2. Audio rendering (`fluidsynth`)
-Each filtered MIDI is rendered to a stereo WAV:
+Each filtered MIDI is rendered to a stereo WAV at full gain (`-g 1.0`):
 ```
 fluidsynth -F track_N.wav -r 48000 -g 1.0 -a float Musyng\ Kite.sf2 track_N.mid
 ```
 Every track WAV is produced independently, containing only the target instrument.
 
-### 3. Duration padding (`pad_wav_to_duration`)
+### 3. Per-track volume adjustment (`apply_gain`)
+FluidSynth's `-g` flag is unreliable, so gain is applied post-render with FFmpeg:
+```
+ffmpeg -y -i track_N.wav -af "volume=<gain>" track_N.wav
+```
+The gain is the slider value divided by 100 (0% → 0.0, 100% → 1.0, 150% → 1.5). If gain is 1.0 the step is skipped.
+
+### 4. Duration padding (`pad_wav_to_duration`)
 All track WAVs are padded with silence via `ffmpeg apad,atrim=0:{max_dur}` so they match the length of the longest track. This guarantees all channels have the same timeline.
 
-### 4. Mix buses
+### 5. Mix buses
 
 | Bus | Input tracks | Process | Output |
 |-----|-------------|---------|--------|
 | Front | Tracks marked as **front** | `amix` (sample-sum, stereo) | `front.wav` (stereo) |
-| Center | Tracks marked as **center** | `amix` + `pan=mono\|c0=c0+c1` | `center.wav` (mono) |
+| Center | Tracks marked as **center** | `amix` + `pan=mono\|c0=0.5*c0+0.5*c1` | `center.wav` (mono) |
 | Rear | Tracks marked as **rear** | `amix` (sample-sum, stereo) | `rear.wav` (stereo) |
-| Subwoofer | Tracks with **subwoofer** enabled | `amix` + `pan=mono\|c0=c0+c1` + `lowpass=f=120,volume=1.5` | `sub.wav` (mono) |
+| Subwoofer | Tracks with **subwoofer** enabled | `amix` + `pan=mono\|c0=0.5*c0+0.5*c1` + `lowpass=f=120` + `volume=0.5` | `sub.wav` (mono) |
 
-### 5. Channel extraction (`extract_mono_channel`)
+Center and subwoofer channels use a 0.5 factor to keep them at the same perceived level as front/rear channels (which split their signal across two speakers).
+
+### 6. Channel extraction (`extract_mono_channel`)
 From the stereo mix buses, individual mono channels are extracted with `pan=mono|c0=cN`:
 
 | Source | Extraction | Output |
@@ -66,14 +88,14 @@ From the stereo mix buses, individual mono channels are extracted with `pan=mono
 | `center.wav` | (already mono) | `FC.wav` |
 | `sub.wav` | (already mono) | `LFE.wav` |
 
-### 6. 5.1 assembly (`assemble_51`)
+### 7. 5.1 assembly (`assemble_51`)
 All six mono WAVs are combined into a single 5.1 WAV with SoX:
 ```
 sox -M -b 16 FL.wav FR.wav center.wav sub.wav SL.wav SR.wav temp_51.wav rate 48000
 ```
 The `-M` (merge) flag places each input in one output channel, preserving the order: FL, FR, FC, LFE, SL, SR.
 
-### 7. Encoding
+### 8. Encoding
 
 **DTS** (Digital Theater Systems):
 ```
@@ -85,7 +107,7 @@ ffmpeg -y -channel_layout 5.1 -i temp_51.wav -c:a dca -strict experimental -b:a 
 ffmpeg -y -channel_layout 5.1 -i temp_51.wav -c:a ac3 -b:a 640k -ar 48000 output.ac3
 ```
 
-The output files inherit the original MIDI filename (e.g. `The_power_of_love.dts` and `The_power_of_love.ac3`).
+The output files inherit the original MIDI filename and the SoundFont name (e.g. `The_power_of_love_Musyng Kite.dts`).
 
 ## Output structure
 
@@ -99,3 +121,5 @@ output/
 │                    temp_51.wav
 └── final/        → <name>.dts, <name>.ac3
 ```
+
+Selections (position, subwoofer, volume, SoundFont) are saved on process and restored when revisiting the tracks page. The status of each step is written to `output/status.json` and polled by the frontend.
