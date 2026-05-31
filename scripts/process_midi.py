@@ -29,10 +29,12 @@ def filter_midi_by_channel(midi_path, channel, output_path):
         return events
 
     def make_track(events):
+        events.sort(key=lambda x: x[0])
         t = mido.MidiTrack()
         last = 0
         for abs_tick, msg in events:
-            msg.time = abs_tick - last
+            delta = max(0, abs_tick - last)
+            msg.time = delta
             last = abs_tick
             t.append(msg)
         return t
