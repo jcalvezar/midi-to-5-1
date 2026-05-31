@@ -60,14 +60,17 @@ export default function ProcessPage() {
         if (d.status === 'completed' || d.status === 'error') {
           doneRef.current = true
           clearInterval(interval)
+          clearInterval(stuckTimer)
         }
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Unknown error')
         clearInterval(interval)
+        clearInterval(stuckTimer)
       }
     }, 1000)
 
     const stuckTimer = setInterval(() => {
+      if (doneRef.current) return
       if (Date.now() - lastUpdate.current > 30000) {
         setStuck(true)
       }
