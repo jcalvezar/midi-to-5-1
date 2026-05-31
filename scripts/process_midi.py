@@ -373,6 +373,7 @@ if __name__ == "__main__":
     selections = json.loads(sys.argv[3])
     if len(sys.argv) > 4 and sys.argv[4]:
         SOUNDFONT = sys.argv[4]
+    sf_name = "_" + pathlib.Path(SOUNDFONT).stem
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -385,6 +386,7 @@ if __name__ == "__main__":
             base_name = meta.get("baseName", base_name)
         except Exception:
             pass
+    base_name += sf_name
 
     STATUS_FILE = os.path.join(output_dir, "status.json")
 
