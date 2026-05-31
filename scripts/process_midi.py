@@ -2,14 +2,47 @@ import sys
 import json
 import os
 import subprocess
+import tempfile
 
 import pathlib
+import mido
 SCRIPT_DIR = pathlib.Path(__file__).parent.resolve()
 SOUNDFONT = str(SCRIPT_DIR.parent.parent / "Musyng Kite.sf2")
 SAMPLE_RATE = "48000"
 
 STATUS_FILE = None
 steps = []
+
+
+def filter_midi_by_channel(midi_path, channel, output_path):
+    mid = mido.MidiFile(midi_path)
+    new_mid = mido.MidiFile(type=1, ticks_per_beat=mid.ticks_per_beat)
+
+    def collect_events(tracks, predicate):
+        events = []
+        for track in tracks:
+            abs_tick = 0
+            for msg in track:
+                abs_tick += msg.time
+                if predicate(msg):
+                    events.append((abs_tick, msg.copy()))
+        return events
+
+    def make_track(events):
+        t = mido.MidiTrack()
+        last = 0
+        for abs_tick, msg in events:
+            msg.time = abs_tick - last
+            last = abs_tick
+            t.append(msg)
+        return t
+
+    cond_pred = lambda m: m.type in ('set_tempo', 'time_signature', 'key_signature')
+    inst_pred = lambda m: hasattr(m, 'channel') and m.channel == channel
+
+    new_mid.tracks.append(make_track(collect_events(mid.tracks, cond_pred)))
+    new_mid.tracks.append(make_track(collect_events(mid.tracks, inst_pred)))
+    new_mid.save(output_path)
 
 
 def build_steps(selections):
@@ -21,6 +54,7 @@ def build_steps(selections):
     s.append({"label": "Mixing center channel", "status": "pending"})
     s.append({"label": "Mixing rear channels (L/R)", "status": "pending"})
     s.append({"label": "Extracting subwoofer (LFE)", "status": "pending"})
+    s.append({"label": "Extracting 5.1 channel WAVs", "status": "pending"})
     s.append({"label": "Generating DTS 5.1 mix", "status": "pending"})
     s.append({"label": "Generating AC3 5.1 mix", "status": "pending"})
     return s
@@ -93,6 +127,19 @@ def render_track(midi_path, output_wav):
     run_cmd(cmd, "FluidSynth render")
 
 
+def pad_wav_to_duration(wav_path, target_dur):
+    current = get_wav_duration(wav_path)
+    if current >= target_dur - 0.1:
+        return
+    tmp = wav_path + ".tmp.wav"
+    run_cmd([
+        "ffmpeg", "-y", "-i", wav_path,
+        "-af", f"apad,atrim=0:{target_dur}",
+        "-ac", "2", "-ar", SAMPLE_RATE, tmp
+    ], "Pad WAV duration")
+    os.replace(tmp, wav_path)
+
+
 def process_midi(midi_path, output_dir, selections, base_name="output"):
     os.makedirs(output_dir, exist_ok=True)
     wavs_dir = os.path.join(output_dir, "wavs")
@@ -109,11 +156,23 @@ def process_midi(midi_path, output_dir, selections, base_name="output"):
         current += 1
         label = steps[current - 1]["label"]
         progress(current, total, label)
+        ch = sel["channel"]
         wav_path = os.path.join(wavs_dir, f"track_{i}.wav")
+        tmp_midi = os.path.join(output_dir, f"track_{i}.mid")
         try:
-            render_track(midi_path, wav_path)
+            filter_midi_by_channel(midi_path, ch, tmp_midi)
+            render_track(tmp_midi, wav_path)
         except Exception as e:
             fail(f"Error rendering track {i}: {e}")
+        finally:
+            if os.path.exists(tmp_midi):
+                os.remove(tmp_midi)
+
+    track_wavs = [os.path.join(wavs_dir, f"track_{i}.wav") for i in range(len(selections))]
+    max_track_dur = get_max_duration(track_wavs)
+    if max_track_dur > 0:
+        for wav in track_wavs:
+            pad_wav_to_duration(wav, max_track_dur)
 
     current += 1
     progress(current, total, steps[current - 1]["label"])
@@ -146,6 +205,13 @@ def process_midi(midi_path, output_dir, selections, base_name="output"):
         extract_subwoofer(sub_tracks, os.path.join(mixes_dir, "sub.wav"))
     else:
         create_silent_wav(os.path.join(mixes_dir, "sub.wav"), 1)
+
+    current += 1
+    progress(current, total, steps[current - 1]["label"])
+    extract_mono_channel(os.path.join(mixes_dir, "front.wav"), os.path.join(mixes_dir, "FL.wav"), "c0")
+    extract_mono_channel(os.path.join(mixes_dir, "front.wav"), os.path.join(mixes_dir, "FR.wav"), "c1")
+    extract_mono_channel(os.path.join(mixes_dir, "rear.wav"), os.path.join(mixes_dir, "SL.wav"), "c0")
+    extract_mono_channel(os.path.join(mixes_dir, "rear.wav"), os.path.join(mixes_dir, "SR.wav"), "c1")
 
     current += 1
     progress(current, total, steps[current - 1]["label"])
@@ -185,19 +251,11 @@ def mix_stereo(input_wavs, output_wav):
     if not existing:
         create_silent_wav(output_wav, 2)
         return
-    duration = get_max_duration(existing)
-    if duration <= 0:
-        duration = 10
     mix_inputs = []
     for w in existing:
         mix_inputs.extend(["-i", w])
     ch = len(existing)
-    if ch == 1:
-        filter_str = f"[0:a]apad,atrim=0:{duration}[a];[a]amerge=inputs=1,pan=stereo|c0=c0|c1=c0[m]"
-    elif ch == 2:
-        filter_str = f"amerge=inputs={ch}[m]"
-    else:
-        filter_str = f"amerge=inputs={ch},pan=stereo|c0=c0+c1|c1=c2+c3[m]"
+    filter_str = f"amix=inputs={ch}:duration=longest[m]"
     cmd = ["ffmpeg", "-y", *mix_inputs, "-filter_complex", filter_str,
            "-map", "[m]", "-ac", "2", "-ar", SAMPLE_RATE, output_wav]
     run_cmd(cmd, "Stereo mix")
@@ -208,13 +266,11 @@ def mix_mono(input_wavs, output_wav):
     if not existing:
         create_silent_wav(output_wav, 1)
         return
-    duration = get_max_duration(existing)
-    if duration <= 0:
-        duration = 10
     mix_inputs = []
     for w in existing:
         mix_inputs.extend(["-i", w])
-    filter_str = f"amerge=inputs={len(existing)},pan=mono|c0={'+'.join([f'c{i}' for i in range(len(existing))])}[m]"
+    ch = len(existing)
+    filter_str = f"amix=inputs={ch}:duration=longest,pan=mono|c0=c0+c1[m]"
     cmd = ["ffmpeg", "-y", *mix_inputs, "-filter_complex", filter_str,
            "-map", "[m]", "-ac", "1", "-ar", SAMPLE_RATE, output_wav]
     run_cmd(cmd, "Mono mix")
@@ -225,16 +281,11 @@ def extract_subwoofer(input_wavs, output_wav):
     if not existing:
         create_silent_wav(output_wav, 1)
         return
-    duration = get_max_duration(existing)
-    if duration <= 0:
-        duration = 10
     mix_inputs = []
     for w in existing:
         mix_inputs.extend(["-i", w])
-    filter_str = (
-        f"amerge=inputs={len(existing)},pan=mono|c0={'+'.join([f'c{i}' for i in range(len(existing))])}"
-        f",lowpass=f=120,volume=1.5[m]"
-    )
+    ch = len(existing)
+    filter_str = f"amix=inputs={ch}:duration=longest,pan=mono|c0=c0+c1,lowpass=f=120,volume=1.5[m]"
     cmd = ["ffmpeg", "-y", *mix_inputs, "-filter_complex", filter_str,
            "-map", "[m]", "-ac", "1", "-ar", SAMPLE_RATE, output_wav]
     run_cmd(cmd, "Subwoofer extract")
@@ -246,75 +297,71 @@ def create_silent_wav(output_wav, channels):
     run_cmd(cmd, "Silent WAV")
 
 
+def extract_mono_channel(input_wav, output_wav, channel_expr):
+    if not os.path.exists(input_wav):
+        create_silent_wav(output_wav, 1)
+        return
+    run_cmd([
+        "ffmpeg", "-y", "-i", input_wav,
+        "-af", f"pan=mono|c0={channel_expr}",
+        "-ac", "1", "-ar", SAMPLE_RATE, output_wav
+    ], "Extract mono channel")
+
+
+def assemble_51(mixes_dir, output_wav, max_dur):
+    ch_names = ["FL", "FR", "FC", "LFE", "SL", "SR"]
+    names = {"FC": "center.wav", "LFE": "sub.wav"}
+    sox_inputs = []
+    for cn in ch_names:
+        fname = names.get(cn, f"{cn}.wav")
+        p = os.path.join(mixes_dir, fname)
+        if not os.path.exists(p):
+            dummy = os.path.join(mixes_dir, f"{cn}_dummy.wav")
+            create_silent_wav(dummy, 1)
+            sox_inputs.append(dummy)
+        else:
+            sox_inputs.append(p)
+    # Trim/pad each to exact max_dur, then merge 6 monos into one WAV with sox -M
+    trimmed = []
+    for i, p in enumerate(sox_inputs):
+        tp = p + ".trimmed.wav"
+        run_cmd([
+            "ffmpeg", "-y", "-i", p,
+            "-af", f"atrim=0:{max_dur},apad=whole_dur={max_dur}",
+            "-ac", "1", "-ar", SAMPLE_RATE, tp
+        ], "Trim channel")
+        trimmed.append(tp)
+    # sox -M merges in input order: FL, FR, FC, LFE, SL, SR
+    cmd = ["sox", "-M", "-b", "16"] + trimmed + [output_wav, "rate", SAMPLE_RATE]
+    run_cmd(cmd, "Create 5.1 WAV")
+    for tp in trimmed:
+        if os.path.exists(tp):
+            os.remove(tp)
+
+
 def generate_dts(mixes_dir, output_path):
     temp_51 = os.path.join(mixes_dir, "temp_51.wav")
-    ch_map = {
-        "front": os.path.join(mixes_dir, "front.wav"),
-        "center": os.path.join(mixes_dir, "center.wav"),
-        "rear": os.path.join(mixes_dir, "rear.wav"),
-        "sub": os.path.join(mixes_dir, "sub.wav"),
-    }
-    durations = []
-    for p in ch_map.values():
-        if os.path.exists(p):
-            durations.append(get_wav_duration(p))
-    max_dur = max(durations) if durations else 10
+    max_dur = get_max_duration([
+        os.path.join(mixes_dir, f)
+        for f in ["front.wav", "center.wav", "rear.wav", "sub.wav"]
+    ])
     if max_dur <= 0:
         max_dur = 10
-    inputs = []
-    for name in ["front", "center", "sub", "rear"]:
-        p = ch_map[name]
-        if os.path.exists(p):
-            inputs.extend(["-i", p])
-        else:
-            dummy = os.path.join(mixes_dir, f"{name}_dummy.wav")
-            create_silent_wav(dummy, 2 if name in ("front", "rear") else 1)
-            inputs.extend(["-i", dummy])
-    fc = (
-        f"[0:a]atrim=0:{max_dur}[a0];[1:a]atrim=0:{max_dur}[a1];"
-        f"[2:a]atrim=0:{max_dur}[a2];[3:a]atrim=0:{max_dur}[a3];"
-        f"[a0][a1][a2][a3]amerge=inputs=4,"
-        f"pan=5.1(side)|FL=c0|FR=c1|FC=c2|LFE=c3|SL=c4|SR=c5[m]"
-    )
-    run_cmd(["ffmpeg", "-y", *inputs, "-filter_complex", fc,
-             "-map", "[m]", "-c:a", "pcm_s16le", "-ar", SAMPLE_RATE, temp_51], "Create 5.1 WAV")
-    run_cmd(["ffmpeg", "-y", "-i", temp_51, "-c:a", "dca",
+    assemble_51(mixes_dir, temp_51, max_dur)
+    run_cmd(["ffmpeg", "-y", "-channel_layout", "5.1", "-i", temp_51, "-c:a", "dca",
              "-strict", "experimental", "-b:a", "1536k", "-ar", SAMPLE_RATE, output_path], "DTS encode")
 
 
 def generate_ac3(mixes_dir, output_path):
     temp_51 = os.path.join(mixes_dir, "temp_51_ac3.wav")
-    ch_map = {
-        "front": os.path.join(mixes_dir, "front.wav"),
-        "center": os.path.join(mixes_dir, "center.wav"),
-        "rear": os.path.join(mixes_dir, "rear.wav"),
-        "sub": os.path.join(mixes_dir, "sub.wav"),
-    }
-    durations = []
-    for p in ch_map.values():
-        if os.path.exists(p):
-            durations.append(get_wav_duration(p))
-    max_dur = max(durations) if durations else 10
+    max_dur = get_max_duration([
+        os.path.join(mixes_dir, f)
+        for f in ["front.wav", "center.wav", "rear.wav", "sub.wav"]
+    ])
     if max_dur <= 0:
         max_dur = 10
-    inputs = []
-    for name in ["front", "center", "sub", "rear"]:
-        p = ch_map[name]
-        if os.path.exists(p):
-            inputs.extend(["-i", p])
-        else:
-            dummy = os.path.join(mixes_dir, f"{name}_dummy.wav")
-            create_silent_wav(dummy, 2 if name in ("front", "rear") else 1)
-            inputs.extend(["-i", dummy])
-    fc = (
-        f"[0:a]atrim=0:{max_dur}[a0];[1:a]atrim=0:{max_dur}[a1];"
-        f"[2:a]atrim=0:{max_dur}[a2];[3:a]atrim=0:{max_dur}[a3];"
-        f"[a0][a1][a2][a3]amerge=inputs=4,"
-        f"pan=5.1(side)|FL=c0|FR=c1|FC=c2|LFE=c3|SL=c4|SR=c5[m]"
-    )
-    run_cmd(["ffmpeg", "-y", *inputs, "-filter_complex", fc,
-             "-map", "[m]", "-c:a", "pcm_s16le", "-ar", SAMPLE_RATE, temp_51], "Create 5.1 WAV")
-    run_cmd(["ffmpeg", "-y", "-i", temp_51, "-c:a", "ac3",
+    assemble_51(mixes_dir, temp_51, max_dur)
+    run_cmd(["ffmpeg", "-y", "-channel_layout", "5.1", "-i", temp_51, "-c:a", "ac3",
              "-b:a", "640k", "-ar", SAMPLE_RATE, output_path], "AC3 encode")
 
 
