@@ -130,6 +130,18 @@ def render_track(midi_path, output_wav):
     run_cmd(cmd, "FluidSynth render")
 
 
+def apply_gain(input_wav, gain):
+    if gain == 1.0:
+        return
+    tmp = input_wav + ".gain.wav"
+    run_cmd([
+        "ffmpeg", "-y", "-i", input_wav,
+        "-af", f"volume={gain:.4f}",
+        "-ac", "2", "-ar", SAMPLE_RATE, tmp
+    ], "Apply gain")
+    os.replace(tmp, input_wav)
+
+
 def pad_wav_to_duration(wav_path, target_dur):
     current = get_wav_duration(wav_path)
     if current >= target_dur - 0.1:
@@ -164,7 +176,10 @@ def process_midi(midi_path, output_dir, selections, base_name="output"):
         tmp_midi = os.path.join(output_dir, f"track_{i}.mid")
         try:
             filter_midi_by_channel(midi_path, ch, tmp_midi)
+            vol = sel.get("volume", 100) / 100.0
+            log(f"DEBUG: track {i} ch={ch} ({sel.get('name', '?')}) volume={sel.get('volume', 100)} gain={vol:.2f}")
             render_track(tmp_midi, wav_path)
+            apply_gain(wav_path, vol)
         except Exception as e:
             fail(f"Error rendering track {i}: {e}")
         finally:

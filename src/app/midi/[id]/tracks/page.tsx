@@ -21,6 +21,7 @@ type Selection = {
   is_drum: boolean
   position: 'front' | 'center' | 'rear'
   subwoofer: boolean
+  volume: number
 }
 
 type SoundFont = {
@@ -64,6 +65,7 @@ export default function TracksPage() {
             is_drum: t.is_drum,
             position: 'center' as const,
             subwoofer: t.is_drum,
+            volume: 100,
           }))
         )
       })
@@ -77,6 +79,10 @@ export default function TracksPage() {
 
   const toggleSubwoofer = (index: number) => {
     setSelections((prev) => prev.map((s, i) => (i === index ? { ...s, subwoofer: !s.subwoofer } : s)))
+  }
+
+  const setVolume = (index: number, volume: number) => {
+    setSelections((prev) => prev.map((s, i) => (i === index ? { ...s, volume } : s)))
   }
 
   const handleSubmit = async () => {
@@ -207,6 +213,19 @@ export default function TracksPage() {
                     className="accent-blue-500"
                   />
                   <span className="text-sm">Subwoofer</span>
+                </label>
+
+                <label className="flex items-center gap-2 ml-4">
+                  <span className="text-sm text-zinc-500 w-11">Vol:</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="150"
+                    value={sel?.volume ?? 100}
+                    onChange={(e) => setVolume(i, Number(e.target.value))}
+                    className="w-20 accent-blue-500"
+                  />
+                  <span className="text-xs text-zinc-400 w-8">{sel?.volume ?? 100}%</span>
                 </label>
               </div>
             </div>
