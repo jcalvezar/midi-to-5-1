@@ -11,6 +11,7 @@ type Selection = {
   is_drum: boolean
   position: 'front' | 'center' | 'rear'
   subwoofer: boolean
+  volume: number
 }
 
 const runningProcesses = new Map<string, { child: ReturnType<typeof spawn>; startedAt: number }>()
@@ -47,14 +48,23 @@ export async function POST(
   })
 
   child.stdout?.on('data', (data: Buffer) => {
-    const lines = data.toString().trim().split('\n')
+    const text = data.toString()
+    const lines = text.trim().split('\n')
     for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
       try {
-        const parsed = JSON.parse(line)
+        const parsed = JSON.parse(trimmed)
         if (parsed.type === 'error') {
           console.error(`[process ${id}] Error:`, parsed.message)
+        } else if (parsed.type === 'log') {
+          console.log(`[process ${id}] ${parsed.message}`)
+        } else if (parsed.type === 'progress') {
+          console.log(`[process ${id}] progress: step ${parsed.step}/${parsed.total} - ${parsed.label}`)
         }
-      } catch { }
+      } catch {
+        console.log(`[process ${id}] RAW: ${trimmed.slice(0, 200)}`)
+      }
     }
   })
 
