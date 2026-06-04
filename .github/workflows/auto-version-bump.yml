@@ -33,10 +33,12 @@ jobs:
           git commit -m "chore: bump version to $VERSION"
           git push
 
-      - name: Merge PR into main
+      - name: Wait for mergeability then auto-merge
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
+          sleep 5
           gh pr merge "$PR_NUMBER" \
+            --auto \
             --merge \
             --subject "Merge PR #$PR_NUMBER" \
             --body ""
