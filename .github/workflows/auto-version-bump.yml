@@ -33,19 +33,15 @@ jobs:
           git commit -m "chore: bump version to $VERSION"
           git push
 
-      - name: Wait for mergeability and merge with branch deletion
+      - name: Enable auto-merge and schedule branch deletion
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
-          for i in $(seq 1 30); do
-            RESULT=$(gh pr merge "$PR_NUMBER" \
-              --merge \
-              --delete-branch \
-              --subject "Merge PR #$PR_NUMBER" \
-              --body "" 2>&1) && echo "$RESULT" && exit 0
-            echo "Attempt $i/30: $RESULT"
-            sleep 10
-          done
-          echo "Failed to merge after 30 attempts"
-          exit 1
+          sleep 5
+          gh pr merge "$PR_NUMBER" \
+            --auto \
+            --merge \
+            --delete-branch \
+            --subject "Merge PR #$PR_NUMBER" \
+            --body ""
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
