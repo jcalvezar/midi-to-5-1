@@ -40,6 +40,7 @@ jobs:
           gh pr merge "$PR_NUMBER" \
             --auto \
             --merge \
+            --delete-branch \
             --subject "Merge PR #$PR_NUMBER" \
             --body ""
         env:
