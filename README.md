@@ -26,6 +26,12 @@ brew install fluidsynth ffmpeg sox
 pip3 install mido
 ```
 
+**Windows (Scoop):**
+```powershell
+scoop install fluidsynth ffmpeg sox
+pip install mido
+```
+
 ## Usage
 
 ```bash
