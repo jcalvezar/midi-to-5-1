@@ -1,29 +1,44 @@
-name: Auto bump minor version on PR merge
+name: Version bump + merge via label
 
 on:
-  push:
-    branches: [main]
+  pull_request_target:
+    types: [labeled]
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  bump-version:
-    if: >
-      contains(github.event.head_commit.message, 'Merge pull request')
-      || contains(github.event.head_commit.message, '(#')
+  merge-with-bump:
+    if: github.event.label.name == 'Merge queue'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Bump minor version and push tag
+
+      - name: Bump patch version on the PR branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          npm version patch
-          git push --follow-tags
+          npm version patch --no-git-tag-version
+          VERSION=$(node -p "require('./package.json').version")
+          git add package.json package-lock.json 2>/dev/null || git add package.json
+          git commit -m "chore: bump version to $VERSION"
+          git push
+
+      - name: Merge PR into main
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          gh pr merge "$PR_NUMBER" \
+            --merge \
+            --subject "Merge PR #$PR_NUMBER" \
+            --body ""
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
