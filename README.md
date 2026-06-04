@@ -12,6 +12,13 @@ Web application that converts standard MIDI files into 5.1 surround sound DTS an
 
 By default the project looks for `Musyng Kite.sf2` in the project root. Custom SoundFonts can be uploaded from the web UI.
 
+### Installing system dependencies (Debian/Ubuntu)
+
+```bash
+sudo apt install fluidsynth ffmpeg sox python3-pip
+pip install mido
+```
+
 ## Usage
 
 ```bash
