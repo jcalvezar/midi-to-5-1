@@ -33,29 +33,33 @@ jobs:
           git commit -m "chore: bump version to $VERSION"
           git push
 
-      - name: Wait for PR to become mergeable
+      - name: Enable auto-merge
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
-          for i in $(seq 1 30); do
-            STATE=$(gh pr view "$PR_NUMBER" --json mergeable -q '.mergeable' 2>/dev/null)
-            if [ "$STATE" = "MERGEABLE" ]; then
-              echo "PR is mergeable after ${i} checks"
-              exit 0
-            fi
-            echo "Waiting for mergeable... ($i/30)"
-            sleep 5
-          done
-          echo "PR did not become mergeable after 30 attempts"
-          exit 1
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Merge PR and delete branch
-        run: |
-          PR_NUMBER=${{ github.event.pull_request.number }}
+          sleep 5
           gh pr merge "$PR_NUMBER" \
+            --auto \
             --merge \
             --subject "Merge PR #$PR_NUMBER" \
             --body ""
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for merge and delete branch
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          BRANCH=${{ github.event.pull_request.head.ref }}
+          echo "Waiting for PR #$PR_NUMBER to be merged..."
+          for i in $(seq 1 30); do
+            STATE=$(gh pr view "$PR_NUMBER" --json state -q '.state' 2>/dev/null)
+            if [ "$STATE" = "MERGED" ]; then
+              echo "PR merged, deleting branch $BRANCH..."
+              gh api "repos/${{ github.repository }}/git/refs/heads/$BRANCH" -X DELETE
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "PR was not merged after 30 attempts"
+          exit 1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
