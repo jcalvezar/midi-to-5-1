@@ -124,6 +124,20 @@ output/
 
 Selections (position, subwoofer, volume, SoundFont) are saved on process and restored when revisiting the tracks page. The status of each step is written to `output/status.json` and polled by the frontend.
 
+## Project structure
+
+```
+midiar/
+├── src/                  # Next.js app (pages, components, API routes)
+│   ├── app/              # App router pages
+│   └── lib/              # Pipeline modules (render, mix, encode)
+├── uploads/              # Uploaded MIDIs and conversion outputs
+├── .github/workflows/    # CI / auto-merge workflows
+├── public/               # Static assets
+├── package.json
+└── README.md
+```
+
 ## Merge queue
 
 Every PR that should be merged to `main` must include a version bump. Instead of doing it manually, the project uses a label-based workflow:
