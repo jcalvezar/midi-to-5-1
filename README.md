@@ -128,13 +128,12 @@ Selections (position, subwoofer, volume, SoundFont) are saved on process and res
 
 Every PR that should be merged to `main` must include a version bump. Instead of doing it manually, the project uses a label-based workflow:
 
-1. **Create the label** `Merge queue` in the repo if it doesn't exist (Settings → Labels).
-2. **Open a PR** against `main`.
-3. **Add the `Merge queue` label** to the PR.
+1. **Open a PR** against `main`.
+2. **Add the `Merge queue` label** to the PR (already created in the repo).
 
 The workflow will:
 1. Bump the patch version (`npm version patch`) on the PR branch
-2. Commit and push the change
-3. Merge the PR into `main`
+2. Commit, push, enable auto-merge, and merge the PR into `main`
+3. Delete the PR branch
 
 The version bump ends up as part of the PR's commits, so no extra commits appear on `main` after the merge.
