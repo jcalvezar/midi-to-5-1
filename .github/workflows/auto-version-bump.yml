@@ -33,20 +33,26 @@ jobs:
           git commit -m "chore: bump version to $VERSION"
           git push
 
-      - name: Merge PR and delete branch immediately
+      - name: Enable Auto-Merge and Force Delete Branch
         run: |
           PR_NUMBER=${{ github.event.pull_request.number }}
           BRANCH_NAME=${{ github.event.pull_request.head.ref }}
           
-          echo "Merging PR #$PR_NUMBER..."
-          # Hacemos el merge directo (espera a que termine)
+          echo "1. Activando auto-merge para el PR #$PR_NUMBER..."
+          # Usamos --auto para que GitHub lo mergee apenas termine de procesar el push anterior
           gh pr merge "$PR_NUMBER" \
+            --auto \
             --merge \
             --subject "Merge PR #$PR_NUMBER" \
             --body ""
           
-          echo "PR Merged successfully. Deleting branch $BRANCH_NAME..."
-          # Borramos la rama usando la CLI de forma explícita justo después
-          gh pr close "$PR_NUMBER" --delete-branch || git push origin --delete "$BRANCH_NAME"
+          echo "2. Esperando 10 segundos a que GitHub procese e incremente el commit..."
+          sleep 10
+          
+          echo "3. Forzando el borrado de la rama en el repositorio..."
+          # Esto le pega directo al servidor de Git para borrar la rama, ignorando el estado del PR
+          git push origin --delete "$BRANCH_NAME" || true
+          
+          echo "4. Limpieza completada."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
